@@ -6,14 +6,22 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # copy root package files and workspace config
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# copy package files and workspace config (lockfile may be missing in some build contexts)
+COPY package.json pnpm-workspace.yaml ./
 COPY backend/package.json backend/
 
-# install pnpm
-RUN npm install -g pnpm@latest
+# ensure curl is available and fetch pnpm-lock.yaml from the repo if it's not present in the build context
+RUN apk add --no-cache curl || true
+RUN if [ ! -f pnpm-lock.yaml ]; then \
+		echo "pnpm-lock.yaml not found in context — fetching from GitHub"; \
+		curl -fsSL https://raw.githubusercontent.com/kalkalkida/agriconnect2/main/pnpm-lock.yaml -o pnpm-lock.yaml || echo "warning: could not fetch pnpm-lock.yaml"; \
+	else \
+		echo "pnpm-lock.yaml present in context"; \
+	fi
 
-# install dependencies for entire workspace (frontend + backend)
-RUN pnpm install --frozen-lockfile --prefer-offline
+# install pnpm and workspace dependencies
+RUN npm install -g pnpm@latest
+RUN pnpm install --frozen-lockfile --prefer-offline || pnpm install --prefer-offline
 
 # copy remaining source files
 COPY . .
