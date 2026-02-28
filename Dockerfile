@@ -40,7 +40,8 @@ COPY --from=builder /app .
 RUN npm install -g pnpm@latest
 
 # ensure production dependencies only
-RUN pnpm prune --prod
+ENV CI=true
+RUN pnpm prune --prod --no-tty
 
 EXPOSE 3000
 
