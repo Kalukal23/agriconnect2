@@ -21,6 +21,16 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
+// default empty implementation used during SSR or when provider not yet mounted
+const emptyContext: CartContextType = {
+  cart: [],
+  addToCart: () => {},
+  removeFromCart: () => {},
+  updateQuantity: () => {},
+  clearCart: () => {},
+  getTotal: () => 0,
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [mounted, setMounted] = useState(false)
@@ -74,12 +84,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }, 0)
   }
 
-  if (!mounted) {
-    return <>{children}</>
-  }
-
+  // always provide a context, even before mounting, to prevent SSR errors
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, getTotal }}>
+    <CartContext.Provider
+      value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, getTotal }}
+    >
       {children}
     </CartContext.Provider>
   )
@@ -87,8 +96,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext)
-  if (!context) {
-    throw new Error("useCart must be used within CartProvider")
-  }
-  return context
+  // During SSR or if the provider isn't mounted yet the context may be undefined
+  // but CartProvider always returns a valid value now, so we can safely fall back
+  // to the emptyContext.
+  return context || emptyContext
 }
