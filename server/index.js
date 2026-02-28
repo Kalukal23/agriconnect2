@@ -9,7 +9,8 @@ const port = process.env.PORT || 5000
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
-  database: process.env.DB_NAME,
+  // some deployments (Railway) use DB_DATABASE instead of DB_NAME
+  database: process.env.DB_DATABASE || process.env.DB_NAME,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
 })
