@@ -6,6 +6,7 @@ require("dotenv").config()
 const app = express()
 const port = process.env.PORT || 5000
 
+console.log("[v0] DATABASE_URL=", process.env.DATABASE_URL)
 const pool = new Pool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
@@ -14,6 +15,11 @@ const pool = new Pool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
 })
+// attempt a simple query to verify connection at startup
+pool
+  .query("SELECT NOW()")
+  .then((res) => console.log("[v0] DB connected, time", res.rows[0].now))
+  .catch((err) => console.error("[v0] DB connection error at startup", err))
 
 app.use(cors())
 app.use(express.json())
