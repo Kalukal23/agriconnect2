@@ -41,7 +41,7 @@ RUN npm install -g pnpm@latest
 
 # ensure production dependencies only
 ENV CI=true
-RUN pnpm prune --prod --no-tty
+RUN pnpm prune --prod
 
 EXPOSE 3000
 
