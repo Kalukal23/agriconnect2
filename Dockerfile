@@ -36,6 +36,9 @@ WORKDIR /app
 # copy only built output and node_modules from builder
 COPY --from=builder /app .
 
+# install pnpm for pruning (and later runtime commands)
+RUN npm install -g pnpm@latest
+
 # ensure production dependencies only
 RUN pnpm prune --prod
 
