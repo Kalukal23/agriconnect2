@@ -56,7 +56,10 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (error) {
+    // log environment variables useful for debugging
     console.error("[v0] Registration error:", error)
+    console.error("[v0] ENV DATABASE_URL:", process.env.DATABASE_URL)
+    console.error("[v0] ENV DB_HOST/DB_DATABASE:", process.env.DB_HOST, process.env.DB_DATABASE || process.env.DB_NAME)
     return NextResponse.json({ error: "Registration failed" }, { status: 500 })
   }
 }
