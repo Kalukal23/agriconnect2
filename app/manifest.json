@@ -13,5 +13,6 @@
       "sizes": "32x32",
       "type": "image/png"
     }
-  ]
+  ],
+  "favicon": "/favicon.ico"
 }

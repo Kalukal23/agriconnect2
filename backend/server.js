@@ -4,11 +4,14 @@ const cors = require('cors');
 const { Pool } = require('pg');
 
 const app = express();
+
+// IMPORTANT: Railway provides PORT dynamically
 const PORT = process.env.PORT || 5000;
 
-// PostgreSQL Connection Pool
+// PostgreSQL Connection Pool (Neon requires SSL)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // Middleware
@@ -17,22 +20,38 @@ app.use(express.json());
 
 // Health Check Route
 app.get('/api/health', (req, res) => {
-  res.json({ message: 'Backend is running!', timestamp: new Date() });
+  res.json({
+    message: 'Backend is running!',
+    timestamp: new Date()
+  });
 });
 
 // Test Database Connection
 app.get('/api/db-test', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
-    res.json({ message: 'Database connected!', time: result.rows[0] });
+    res.json({
+      message: 'Database connected!',
+      time: result.rows[0]
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({
+      error: 'Database connection failed',
+      details: error.message
+    });
   }
 });
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`[v0] Backend server running on http://localhost:${PORT}`);
+// Global Error Handler (Good Practice)
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Start Server (Bind to 0.0.0.0 for Railway)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend running on port ${PORT}`);
 });
 
 module.exports = app;
