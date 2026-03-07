@@ -43,6 +43,42 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// Market Prices Route
+app.get('/api/market/prices', async (req, res) => {
+  try {
+    const { crop, region, search } = req.query;
+
+    let query = 'SELECT id, crop, region, market, price, unit, change_percent AS change, trend, last_updated AS "lastUpdated" FROM market_prices WHERE 1=1';
+    const params = [];
+
+    if (crop && crop !== "all") {
+      params.push(crop);
+      query += ` AND crop = $${params.length}`;
+    }
+
+    if (region && region !== "all") {
+      params.push(region);
+      query += ` AND region = $${params.length}`;
+    }
+
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND (crop ILIKE $${params.length} OR region ILIKE $${params.length} OR market ILIKE $${params.length})`;
+    }
+
+    query += ' ORDER BY crop, region';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: 'Failed to fetch market prices',
+      details: error.message
+    });
+  }
+});
+
 // Global Error Handler (Good Practice)
 app.use((err, req, res, next) => {
   console.error(err.stack);
