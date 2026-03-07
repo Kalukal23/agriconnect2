@@ -1,6 +1,0 @@
-packages:
-  - '.'
-  - 'backend'
-
-onlyBuiltDependencies:
-  - sharp
