@@ -71,8 +71,8 @@ export async function readQAStore(): Promise<FarmerQuestion[]> {
 
 export async function addQuestion(q: { authorId: number; title: string; content: string }): Promise<void> {
   const sql = `
-    INSERT INTO forum_posts (author_id, title, content, is_question, status, created_at, updated_at)
-    VALUES ($1, $2, $3, TRUE, 'pending', NOW(), NOW())
+    INSERT INTO forum_posts (author_id, title, content, is_question, created_at, updated_at)
+    VALUES ($1, $2, $3, TRUE, NOW(), NOW())
   `
   await queryWithRetry(sql, [q.authorId, q.title, q.content])
 }
