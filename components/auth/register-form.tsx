@@ -21,6 +21,7 @@ export function RegisterForm() {
     region: "",
     farmSize: "",
     language: "english",
+    role: "Farmer",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,6 +125,21 @@ export function RegisterForm() {
           <option value="gambela">Gambela</option>
           <option value="harari">Harari</option>
           <option value="dire-dawa">Dire Dawa</option>
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="role">I am a...</Label>
+        <select
+          id="role"
+          className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground"
+          value={formData.role}
+          onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+          required
+          disabled={loading}
+        >
+          <option value="Farmer">Farmer (ገበሬ)</option>
+          <option value="ExtensionOfficer">Extension Worker (ኤክስቴንሽን ወርከር)</option>
         </select>
       </div>
 

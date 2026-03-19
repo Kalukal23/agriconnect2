@@ -3,11 +3,39 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Sprout, TrendingUp, Cloud, BookOpen, Users, Menu, X, Settings, BarChart3 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export function Navigation() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      // Check sessionStorage first (set by admin direct login)
+      const sessionAdmin = sessionStorage.getItem("adminAuthenticated") === "true"
+
+      if (sessionAdmin) {
+        setIsAdmin(true)
+        return
+      }
+
+      // If not, check user role from API
+      try {
+        const response = await fetch("/api/auth/me")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.user?.role === "admin" || data.user?.role === "Admin") {
+            setIsAdmin(true)
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Failed to fetch user role:", error)
+      }
+    }
+
+    checkAdmin()
+  }, [])
 
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: Sprout },
@@ -20,6 +48,7 @@ export function Navigation() {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" })
+      sessionStorage.removeItem("adminAuthenticated")
       window.location.href = "/"
     } catch (error) {
       console.error("[v0] Logout failed:", error)
@@ -31,13 +60,13 @@ export function Navigation() {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2 font-bold text-xl">
+          <Link href="/dashboard" className="flex items-center gap-2 font-bold text-xl mr-8">
             <Sprout className="h-8 w-8" />
             <span className="hidden sm:inline">AgriConnect</span>
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1 flex-1">
             {navItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname === item.href
@@ -45,33 +74,29 @@ export function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
                     isActive ? "bg-primary-foreground/20 font-semibold" : "hover:bg-primary-foreground/10"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
-                  <span>{item.label}</span>
+                  <span className="text-sm">{item.label}</span>
                 </Link>
               )
             })}
           </nav>
 
           {/* User Menu */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2">
             <Link
-              href="/admin/market"
-              className="px-4 py-2 rounded-lg hover:bg-primary-foreground/10 transition-colors flex items-center gap-2"
-              title="Market Admin"
+              href="/settings"
+              className="p-2 rounded-lg hover:bg-primary-foreground/10 transition-colors"
+              title="Settings"
             >
-              <BarChart3 className="h-5 w-5" />
-              <span className="text-sm">Admin</span>
-            </Link>
-            <Link href="/settings" className="px-4 py-2 rounded-lg hover:bg-primary-foreground/10 transition-colors">
               <Settings className="h-5 w-5" />
             </Link>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity"
+              className="ml-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg font-semibold hover:opacity-90 transition-opacity text-sm"
             >
               Logout
             </button>
@@ -104,14 +129,6 @@ export function Navigation() {
               )
             })}
             <div className="mt-4 pt-4 border-t border-primary-foreground/20 space-y-2">
-              <Link
-                href="/admin/market"
-                className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-primary-foreground/10 transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <BarChart3 className="h-5 w-5" />
-                <span>Market Admin</span>
-              </Link>
               <Link
                 href="/settings"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-primary-foreground/10 transition-colors"

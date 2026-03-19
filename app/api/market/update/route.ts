@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields: crop, region, price" }, { status: 400 })
     }
 
-    const updated = updateMarketPrice(crop, region, price, market || "Manual Update")
+    const updated = await updateMarketPrice(crop, region, price, market || "Manual Update")
 
     if (!updated) {
       return NextResponse.json({ error: "Price not found for this crop and region" }, { status: 404 })

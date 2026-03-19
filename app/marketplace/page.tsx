@@ -16,9 +16,13 @@ export default function MarketplacePage() {
   const [cart, setCart] = useState<{ [key: string]: number }>({})
 
   useEffect(() => {
-    const allProducts = getProducts()
-    setProducts(allProducts)
-    filterProducts(allProducts, selectedCategory, searchTerm)
+    const load = async () => {
+      const allProducts = await getProducts()
+      setProducts(allProducts)
+      filterProducts(allProducts, selectedCategory, searchTerm)
+    }
+
+    void load()
   }, [])
 
   const filterProducts = (allProducts: Product[], category: string, search: string) => {

@@ -1,3 +1,5 @@
+import { queryWithRetry } from "@/lib/db-mock"
+
 // SMS service for feature phone integration
 // In production, integrate with Ethio Telecom SMS API or Twilio
 
@@ -15,55 +17,113 @@ export interface SMSSubscription {
   weatherAlerts: boolean
 }
 
-// Mock SMS subscriptions
-const subscriptions: SMSSubscription[] = []
-
 export async function sendSMS(smsData: SMSMessage): Promise<boolean> {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500))
+  const { to, message } = smsData
 
-  // In production, integrate with SMS gateway:
-  // const response = await fetch('https://sms-api.ethiotelecom.et/send', {
-  //   method: 'POST',
-  //   headers: { 'Authorization': `Bearer ${process.env.SMS_API_KEY}` },
-  //   body: JSON.stringify({
-  //     to: smsData.to,
-  //     message: smsData.message
-  //   })
-  // })
+  // Store message record in database
+  const insertSql = `
+    INSERT INTO sms_messages (phone_number, direction, content, status, created_at)
+    VALUES ($1, $2, $3, $4, NOW())
+    RETURNING id
+  `
+  const insertResult = await queryWithRetry(insertSql, [to, "OUT", message, "PENDING"])
+  const messageId = insertResult.rows[0]?.id
 
-  console.log("[v0] SMS sent:", smsData)
-  return true
+  // Try to deliver via Twilio if configured
+  const accountSid = process.env.TWILIO_ACCOUNT_SID
+  const authToken = process.env.TWILIO_AUTH_TOKEN
+  const fromNumber = process.env.TWILIO_FROM_NUMBER
+
+  let status = "SENT"
+  let errorCode: string | null = null
+
+  if (accountSid && authToken && fromNumber) {
+    try {
+      const payload = new URLSearchParams()
+      payload.append("To", to)
+      payload.append("From", fromNumber)
+      payload.append("Body", message)
+
+      const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64")
+      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: payload.toString(),
+      })
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => "")
+        console.error("[v0] Twilio send error", response.status, body)
+        status = "ERROR"
+        errorCode = `HTTP_${response.status}`
+      }
+    } catch (err: any) {
+      console.error("[v0] Twilio send exception", err)
+      status = "ERROR"
+      errorCode = err?.message || "unknown"
+    }
+  } else {
+    // No SMS provider configured; treat as logged for now
+    console.warn("[v0] No SMS provider configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER)")
+    status = "LOGGED"
+  }
+
+  await queryWithRetry(
+    "UPDATE sms_messages SET status = $1, error_code = $2, sent_at = NOW() WHERE id = $3",
+    [status, errorCode, messageId],
+  )
+
+  return status === "SENT" || status === "LOGGED"
+}
+
+export function generateOtp(length = 6): string {
+  const digits = "0123456789"
+  let otp = ""
+  for (let i = 0; i < length; i++) {
+    otp += digits[Math.floor(Math.random() * digits.length)]
+  }
+  return otp
 }
 
 export async function subscribeSMS(subscription: SMSSubscription): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  const { phone, userId } = subscription
 
-  // Check if already subscribed
-  const existing = subscriptions.findIndex((s) => s.phone === subscription.phone)
-  if (existing >= 0) {
-    subscriptions[existing] = subscription
+  const existing = await queryWithRetry("SELECT id FROM sms_subscribers WHERE phone = $1", [phone])
+  if (existing.rows.length) {
+    await queryWithRetry(
+      "UPDATE sms_subscribers SET user_id = $1, subscribed = TRUE, created_at = NOW() WHERE phone = $2",
+      [userId, phone],
+    )
   } else {
-    subscriptions.push(subscription)
+    await queryWithRetry(
+      "INSERT INTO sms_subscribers (user_id, phone, subscribed, created_at) VALUES ($1, $2, TRUE, NOW())",
+      [userId, phone],
+    )
   }
 
   return true
 }
 
 export async function unsubscribeSMS(phone: string): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 300))
-
-  const index = subscriptions.findIndex((s) => s.phone === phone)
-  if (index >= 0) {
-    subscriptions.splice(index, 1)
-  }
-
+  await queryWithRetry("UPDATE sms_subscribers SET subscribed = FALSE WHERE phone = $1", [phone])
   return true
 }
 
 export async function getSMSSubscription(phone: string): Promise<SMSSubscription | null> {
-  await new Promise((resolve) => setTimeout(resolve, 200))
-  return subscriptions.find((s) => s.phone === phone) || null
+  const result = await queryWithRetry("SELECT * FROM sms_subscribers WHERE phone = $1", [phone])
+  const row = result.rows[0]
+  if (!row) return null
+
+  return {
+    phone: row.phone,
+    userId: String(row.user_id),
+    alerts: true,
+    priceUpdates: true,
+    weatherAlerts: true,
+  }
 }
 
 // Format messages for SMS (160 character limit)

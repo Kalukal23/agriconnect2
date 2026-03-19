@@ -1,74 +1,118 @@
 import { type NextRequest, NextResponse } from "next/server"
+import Joi from "joi"
 import { createUser, findUserByPhone } from "@/lib/db-mock"
-import { createToken, setAuthCookie, hashPassword } from "@/lib/auth"
+import { createAccessToken, createRefreshToken, hashPassword, hashToken, setAuthCookies } from "@/lib/auth"
+import { createRefreshToken as storeRefreshToken } from "@/lib/db-mock"
+
+const registerSchema = Joi.object({
+  // UI fields
+  name: Joi.string().max(100).required(),
+  confirmPassword: Joi.string().required(),
+  region: Joi.string().optional(),
+  farmSize: Joi.string().optional(),
+  language: Joi.string().valid("english", "amharic", "oromiffa", "tigrinya", "en", "am").default("english"),
+
+  // Legacy/optional fields
+  username: Joi.string().max(100).optional(),
+  email: Joi.string().email().optional(),
+
+  phone: Joi.string().required(),
+  password: Joi.string().min(8).max(128).required(),
+  preferredLanguage: Joi.string().valid("en", "am").optional(),
+  location: Joi.string().optional(),
+  role: Joi.string().valid("Farmer", "ExtensionOfficer", "Admin").default("Farmer"),
+})
 
 export async function POST(request: NextRequest) {
   try {
-    // log DB envs for debugging network/connectivity issues
-    console.log('[v0] ENV DATABASE_URL:', process.env.DATABASE_URL)
-    console.log('[v0] ENV DB_HOST/DB_DATABASE:', process.env.DB_HOST, process.env.DB_DATABASE || process.env.DB_NAME)
-
     const body = await request.json()
-    const { name, phone, password, region, farmSize, language } = body
+    const validation = registerSchema.validate(body, { abortEarly: false })
 
-    // Validate required fields
-    if (!name || !phone || !password) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (validation.error) {
+      return NextResponse.json({ error: validation.error.details.map((d) => d.message).join(", ") }, { status: 400 })
     }
 
-    // Check if user already exists
+    const { name, confirmPassword, region, language, username, email, phone, password, preferredLanguage, location, role } = validation.value
+
+    // Confirm passwords match
+    if (password !== confirmPassword) {
+      return NextResponse.json({ error: "Passwords do not match" }, { status: 400 })
+    }
+
+    // Determine which language code to store (fallback to preferredLanguage if provided)
+    const languageMap: Record<string, string> = {
+      english: "en",
+      amharic: "am",
+      oromiffa: "om",
+      tigrinya: "ti",
+      en: "en",
+      am: "am",
+    }
+
+    const storedLanguage = preferredLanguage || languageMap[language.toLowerCase()] || "en"
+
+    // Determine location/region (stored as JSONB)
+    let storedLocation: any = null
+    if (region) {
+      storedLocation = { region }
+    } else if (location) {
+      try {
+        storedLocation = typeof location === "string" ? JSON.parse(location) : location
+      } catch {
+        storedLocation = { raw: location }
+      }
+    }
+
+    // Determine display name / username for the user record
+    const storedUsername = username || name || phone
+
+    // Prevent duplicate registration
     const existingUser = await findUserByPhone(phone)
     if (existingUser) {
       return NextResponse.json({ error: "Phone number already registered" }, { status: 400 })
     }
 
-    // Hash password
     const hashedPassword = await hashPassword(password)
 
-    // Create user
     const user = await createUser({
-      name,
+      username: storedUsername,
+      email,
       phone,
-      password: hashedPassword,
-      region,
-      farmSize,
-      language,
+      passwordHash: hashedPassword,
+      preferredLanguage: storedLanguage,
+      location: storedLocation,
+      role,
     })
 
-    // Create JWT token
-    const token = await createToken({
+    const payload = {
       id: user.id,
+      user_id: user.user_id,
+      username: user.username,
+      email: user.email,
       phone: user.phone,
-      name: user.name,
-      region: user.region,
-      language: user.language,
-    })
-
-    // Set auth cookie
-    await setAuthCookie(token)
-
-    return NextResponse.json(
-      {
-        success: true,
-        user: {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          region: user.region,
-        },
-      },
-      { status: 201 },
-    )
-  } catch (error: any) {
-    // Enhanced logging for DB/network errors
-    console.error('[v0] Registration error FULL:', error)
-    console.error('[v0] Registration error Message:', error?.message)
-
-    // If the error is a connectivity timeout, return 503 so clients know it's temporary
-    if (error && (error.code === 'ETIMEDOUT' || error.code === 'ECONNREFUSED')) {
-      return NextResponse.json({ error: 'Database connection failed (timeout)' }, { status: 503 })
+      role: user.role,
+      preferred_language: user.preferred_language,
     }
 
-    return NextResponse.json({ error: 'Registration failed: ' + error?.message }, { status: 500 })
+    const accessToken = createAccessToken(payload)
+    const refreshToken = createRefreshToken(payload)
+
+    // store refresh token hash for revocation
+    const refreshHash = hashToken(refreshToken)
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    await storeRefreshToken(user.id, refreshHash, expiresAt)
+
+    await setAuthCookies(accessToken, refreshToken)
+
+    return NextResponse.json({ success: true, user: { id: user.id, username: user.username, phone: user.phone, email: user.email, role: user.role } }, { status: 201 })
+  } catch (error: any) {
+    console.error("[v0] Registration error FULL:", error)
+    console.error("[v0] Registration error Message:", error?.message)
+
+    if (error && (error.code === "ETIMEDOUT" || error.code === "ECONNREFUSED")) {
+      return NextResponse.json({ error: "Database connection failed (timeout)" }, { status: 503 })
+    }
+
+    return NextResponse.json({ error: "Registration failed: " + (error?.message || "unknown") }, { status: 500 })
   }
 }

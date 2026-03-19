@@ -13,7 +13,7 @@ export default async function KnowledgePage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navigation />
-      <KnowledgePageClient />
+      <KnowledgePageClient user={user} />
     </div>
   )
 }

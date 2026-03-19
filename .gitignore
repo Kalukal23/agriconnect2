@@ -1,11 +1,24 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
+**/node_modules/
+
+# temp data
+data/
+
+# temp scripts
+*.pdf
+check-*.js
+fix-*.js
+create-admin.js
+tmp-*.js
 
 # next.js
-/.next/
-/out/
+.next/
+**/out/
+build/
+dist/
 
 # production
 /build

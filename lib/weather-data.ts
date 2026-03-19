@@ -15,37 +15,35 @@ const REGION_COORDS: Record<string, { lat: number; lon: number }> = {
 }
 
 function generateMockCurrentWeather(region: string): CurrentWeather {
-  const baseTemp = 20 + Math.random() * 10
+  // Deterministic fallback if API is not configured
   return {
-    temp: Number.parseFloat(baseTemp.toFixed(1)),
-    feelsLike: Number.parseFloat((baseTemp + (Math.random() - 0.5) * 3).toFixed(1)),
-    humidity: Math.floor(40 + Math.random() * 40),
-    windSpeed: Number.parseFloat((Math.random() * 15).toFixed(1)),
-    condition: ["sunny", "cloudy", "rainy"][Math.floor(Math.random() * 3)],
-    description: "Partly cloudy with chance of rain",
-    rainfall: Number.parseFloat((Math.random() * 10).toFixed(1)),
-    pressure: Math.floor(1000 + Math.random() * 30),
+    temp: 22,
+    feelsLike: 21,
+    humidity: 65,
+    windSpeed: 5.2,
+    condition: "cloudy",
+    description: "Partly cloudy",
+    rainfall: 0,
+    pressure: 1013,
   }
 }
 
 function generateMockForecast(days: number): WeatherForecast[] {
   const forecast: WeatherForecast[] = []
-  const conditions: Array<"sunny" | "cloudy" | "rainy" | "stormy"> = ["sunny", "cloudy", "rainy", "stormy"]
+  const start = new Date()
 
   for (let i = 0; i < days; i++) {
-    const date = new Date()
-    date.setDate(date.getDate() + i)
-
-    const baseTemp = 20 + Math.random() * 10
+    const date = new Date(start)
+    date.setDate(start.getDate() + i)
     forecast.push({
       date: date.toISOString().split("T")[0],
-      temp: Number.parseFloat(baseTemp.toFixed(1)),
-      tempMin: Number.parseFloat((baseTemp - 5).toFixed(1)),
-      tempMax: Number.parseFloat((baseTemp + 5).toFixed(1)),
-      humidity: Math.floor(40 + Math.random() * 40),
-      rainfall: Number.parseFloat((Math.random() * 20).toFixed(1)),
-      condition: conditions[Math.floor(Math.random() * conditions.length)],
-      windSpeed: Number.parseFloat((Math.random() * 15).toFixed(1)),
+      temp: 22,
+      tempMin: 18,
+      tempMax: 26,
+      humidity: 65,
+      rainfall: 0,
+      condition: "cloudy",
+      windSpeed: 5,
     })
   }
 
@@ -53,31 +51,16 @@ function generateMockForecast(days: number): WeatherForecast[] {
 }
 
 function generateMockAlerts(region: string): WeatherAlert[] {
-  const alerts: WeatherAlert[] = []
-
-  if (Math.random() > 0.5) {
-    alerts.push({
+  return [
+    {
       id: "alert-1",
       type: "warning",
-      title: "Heavy Rainfall Expected",
-      description: "Expect heavy rainfall this weekend. Prepare your crops and ensure proper drainage.",
+      title: "Check local weather forecasts",
+      description: "Weather data not configured; please set OPENWEATHER_API_KEY to fetch live data.",
       region,
-      validUntil: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-    })
-  }
-
-  if (Math.random() > 0.7) {
-    alerts.push({
-      id: "alert-2",
-      type: "danger",
-      title: "Drought Warning",
-      description: "Low rainfall expected for the next two weeks. Consider irrigation for sensitive crops.",
-      region,
-      validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    })
-  }
-
-  return alerts
+      validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  ]
 }
 
 export async function getCurrentWeather(region: string): Promise<CurrentWeather> {

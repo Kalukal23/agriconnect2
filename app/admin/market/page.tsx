@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
 
-const ADMIN_PASSWORD = "Kal@#3210"
 const ETHIOPIAN_CROPS = [
   "Teff",
   "Wheat",
@@ -23,16 +22,15 @@ const ETHIOPIAN_CROPS = [
 const ETHIOPIAN_REGIONS = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "SNNPR"]
 
 export default function MarketAdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [passwordInput, setPasswordInput] = useState("")
-  const [passwordError, setPasswordError] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [prices, setPrices] = useState<any[]>([])
   const [selectedCrop, setSelectedCrop] = useState("")
   const [selectedRegion, setSelectedRegion] = useState("")
   const [newPrice, setNewPrice] = useState("")
   const [market, setMarket] = useState("Central Market")
-  const [loading, setLoading] = useState(false)
+  const [updateLoading, setUpdateLoading] = useState(false)
   const [message, setMessage] = useState("")
 
   const [alertType, setAlertType] = useState("price_high")
@@ -46,26 +44,32 @@ export default function MarketAdminPage() {
   const [alertMessage, setAlertMessage] = useState("")
 
   useEffect(() => {
-    const authenticated = sessionStorage.getItem("adminAuthenticated")
-    if (authenticated === "true") {
-      setIsAuthenticated(true)
-      fetchPrices()
-      fetchSubscriberCount()
+    async function checkAccess() {
+      try {
+        const response = await fetch("/api/auth/me")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.user?.role === "admin" || data.user?.role === "Admin") {
+            setIsAdmin(true)
+            fetchPrices()
+            fetchSubscriberCount()
+          } else {
+            // Not an admin
+            window.location.href = "/auth/login?error=unauthorized"
+          }
+        } else {
+          // Not logged in
+          window.location.href = "/auth/login"
+        }
+      } catch (error) {
+        console.error("[v0] Auth check failed:", error)
+        window.location.href = "/auth/login"
+      } finally {
+        setLoading(false)
+      }
     }
+    checkAccess()
   }, [])
-
-  function handlePasswordSubmit() {
-    if (passwordInput === ADMIN_PASSWORD) {
-      setIsAuthenticated(true)
-      setPasswordError("")
-      sessionStorage.setItem("adminAuthenticated", "true")
-      fetchPrices()
-      fetchSubscriberCount()
-    } else {
-      setPasswordError("Invalid password. Please try again.")
-      setPasswordInput("")
-    }
-  }
 
   async function fetchPrices() {
     try {
@@ -93,7 +97,7 @@ export default function MarketAdminPage() {
       return
     }
 
-    setLoading(true)
+    setUpdateLoading(true)
     try {
       const response = await fetch("/api/market/update", {
         method: "POST",
@@ -121,7 +125,7 @@ export default function MarketAdminPage() {
       console.error("[v0] Update error:", error)
       setMessage("Failed to update price")
     } finally {
-      setLoading(false)
+      setUpdateLoading(false)
     }
   }
 
@@ -181,39 +185,25 @@ export default function MarketAdminPage() {
     }
   }
 
-  if (!isAuthenticated) {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+      sessionStorage.removeItem("adminAuthenticated")
+      window.location.href = "/"
+    } catch (error) {
+      console.error("[v0] Logout failed:", error)
+    }
+  }
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 bg-card border-border">
-          <h1 className="text-2xl font-bold text-foreground mb-2 text-center">Admin Access</h1>
-          <p className="text-muted-foreground text-center mb-6">Enter the admin password to continue</p>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Password</label>
-              <Input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handlePasswordSubmit()}
-                placeholder="Enter admin password"
-                className="w-full"
-              />
-            </div>
-
-            {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
-
-            <Button
-              onClick={handlePasswordSubmit}
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              Login
-            </Button>
-          </div>
-        </Card>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     )
   }
+
+  if (!isAdmin) return null // Should be redirected by useEffect
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -232,10 +222,7 @@ export default function MarketAdminPage() {
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <Button
-              onClick={() => {
-                setIsAuthenticated(false)
-                sessionStorage.removeItem("adminAuthenticated")
-              }}
+              onClick={handleLogout}
               variant="outline"
               className="border-border text-foreground hover:bg-muted"
             >
@@ -443,10 +430,10 @@ export default function MarketAdminPage() {
 
           <Button
             onClick={handleUpdatePrice}
-            disabled={loading}
+            disabled={updateLoading}
             className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
           >
-            {loading ? "Updating..." : "Update Price"}
+            {updateLoading ? "Updating..." : "Update Price"}
           </Button>
 
           {message && (

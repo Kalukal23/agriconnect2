@@ -83,7 +83,7 @@ export function ArticleList() {
             </div>
             <div className="flex items-center gap-1">
               <Tag className="h-4 w-4" />
-              {article.tags.slice(0, 2).join(", ")}
+              {(article.tags ?? []).slice(0, 2).join(", ")}
             </div>
           </div>
         </Link>

@@ -29,8 +29,9 @@ app.get("/api/health", async (req, res) => {
     const result = await pool.query("SELECT NOW()")
     res.json({ status: "healthy", time: result.rows[0].now })
   } catch (err) {
-    console.error("[v0] Database connection error:", err)
-    res.status(500).json({ status: "error", message: "Database unreachable" })
+    console.log("[v0] Database connection error:", err)
+    console.log(err && err.stack)
+    res.status(500).json({ status: "error", message: "Database unreachable", error: err && err.message })
   }
 })
 

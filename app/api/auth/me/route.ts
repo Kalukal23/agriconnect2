@@ -26,6 +26,7 @@ export async function GET() {
         farmSize: user.farmSize,
         crops: user.crops,
         language: user.language,
+        role: user.role,
       },
     })
   } catch (error) {

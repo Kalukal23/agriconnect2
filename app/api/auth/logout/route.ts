@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server"
-import { clearAuthCookie } from "@/lib/auth"
+import { type NextRequest, NextResponse } from "next/server"
+import { getAuthTokens, clearAuthCookies, hashToken } from "@/lib/auth"
+import { revokeRefreshToken } from "@/lib/db-mock"
 
-export async function POST() {
+export async function POST(_request: NextRequest) {
   try {
-    await clearAuthCookie()
+    const { refreshToken } = await getAuthTokens()
+    if (refreshToken) {
+      const tokenHash = hashToken(refreshToken)
+      await revokeRefreshToken(tokenHash)
+    }
+    await clearAuthCookies()
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[v0] Logout error:", error)

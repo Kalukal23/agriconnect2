@@ -27,17 +27,17 @@ export default function SellerDashboard() {
   })
 
   useEffect(() => {
-    loadProducts()
+    void loadProducts()
   }, [])
 
-  const loadProducts = () => {
-    const allProducts = getProducts()
+  const loadProducts = async () => {
+    const allProducts = await getProducts()
     // Filter to show only this seller's products (in real app, would be based on auth)
-    const sellerProducts = allProducts.filter((p) => p.seller.name === sellerInfo.name)
+    const sellerProducts = allProducts.filter((p) => p.seller?.name === sellerInfo.name)
     setProducts(sellerProducts)
   }
 
-  const handleAddProduct = (e: React.FormEvent) => {
+  const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!formData.name || !formData.price || !formData.quantity) {
@@ -45,36 +45,42 @@ export default function SellerDashboard() {
       return
     }
 
-    const newProduct = addProduct({
-      name: formData.name,
-      description: formData.description,
-      price: Number.parseFloat(formData.price),
-      category: formData.category,
-      quantity: Number.parseInt(formData.quantity),
-      image: formData.image || "/placeholder.svg?key=default",
-      seller: {
-        id: "seller-current",
-        name: sellerInfo.name,
-        phone: sellerInfo.phone,
+    const newProduct = await addProduct(
+      {
+        name: formData.name,
+        description: formData.description,
+        price: Number.parseFloat(formData.price),
+        category: formData.category,
+        quantity: Number.parseInt(formData.quantity),
+        image: formData.image || "/placeholder.svg?key=default",
       },
-    })
+      "seller-current",
+    )
 
-    setProducts([...products, newProduct])
-    setFormData({
-      name: "",
-      description: "",
-      price: "",
-      category: "Seeds",
-      quantity: "",
-      image: "",
-    })
-    setShowForm(false)
+    if (newProduct) {
+      setProducts([...products, newProduct])
+      setFormData({
+        name: "",
+        description: "",
+        price: "",
+        category: "Seeds",
+        quantity: "",
+        image: "",
+      })
+      setShowForm(false)
+    } else {
+      alert("Failed to add product")
+    }
   }
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     if (confirm("Are you sure you want to delete this product?")) {
-      deleteProduct(id)
-      setProducts(products.filter((p) => p.id !== id))
+      const deleted = await deleteProduct(id)
+      if (deleted) {
+        setProducts(products.filter((p) => p.id !== id))
+      } else {
+        alert("Failed to delete product")
+      }
     }
   }
 
