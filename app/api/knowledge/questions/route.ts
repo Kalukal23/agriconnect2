@@ -43,21 +43,30 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    console.log("[v0] CREATE QUESTION - body:", body)
     const { title, content } = body
     if (!title || !content) {
       return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
     }
 
     const authorId = (user as any).id
+    console.log("[v0] CREATE QUESTION - user id:", authorId, "role:", (user as any).role)
+    
     if (!authorId) {
        return NextResponse.json({ error: "User ID not found in session" }, { status: 400 })
     }
 
-    await addQuestion({
-      authorId,
-      title,
-      content,
-    })
+    try {
+      await addQuestion({
+        authorId,
+        title,
+        content,
+      })
+      console.log("[v0] CREATE QUESTION - SUCCESS")
+    } catch (dbErr: any) {
+      console.error("[v0] CREATE QUESTION - DATABASE ERROR:", dbErr)
+      throw dbErr
+    }
 
     return NextResponse.json({ success: true }, { status: 201 })
   } catch (error) {
