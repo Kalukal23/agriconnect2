@@ -69,26 +69,27 @@ export async function readQAStore(): Promise<FarmerQuestion[]> {
   return questions
 }
 
-export async function addQuestion(q: Omit<FarmerQuestion, "id" | "createdAt" | "answers" | "status">): Promise<void> {
+export async function addQuestion(q: { authorId: number; title: string; content: string }): Promise<void> {
   const sql = `
     INSERT INTO forum_posts (author_id, title, content, is_question, status, created_at, updated_at)
-    VALUES ((SELECT id FROM users WHERE phone = $1 OR user_id::text = $2 LIMIT 1), $3, $4, TRUE, 'pending', NOW(), NOW())
+    VALUES ($1, $2, $3, TRUE, 'pending', NOW(), NOW())
   `
-  await queryWithRetry(sql, [q.farmerPhone || "999", q.farmerId, q.title, q.content])
+  await queryWithRetry(sql, [q.authorId, q.title, q.content])
 }
 
-export async function addAnswer(questionId: string, answer: Omit<FarmerAnswer, "id" | "createdAt">): Promise<boolean> {
-  const findPostId = await queryWithRetry("SELECT id FROM forum_posts WHERE post_id = $1", [questionId])
-  if (findPostId.rows.length === 0) return false
-  const postId = findPostId.rows[0].id
-
+export async function addAnswer(questionId: string, answer: { officerId: number; content: string }): Promise<boolean> {
   const sql = `
     INSERT INTO forum_replies (post_id, author_id, content, created_at, updated_at)
-    VALUES ($1, $2, $3, NOW(), NOW())
+    SELECT id, $1, $2, NOW(), NOW()
+    FROM forum_posts WHERE post_id = $3
+    RETURNING post_id
   `
-  await queryWithRetry(sql, [postId, answer.officerId, answer.content])
-
-  // Update question status to answered
-  await queryWithRetry("UPDATE forum_posts SET is_answered = TRUE WHERE id = $1", [postId])
-  return true
+  const result = await queryWithRetry(sql, [answer.officerId, answer.content, questionId])
+  
+  if (result.rows.length > 0) {
+    // Update question status to answered
+    await queryWithRetry("UPDATE forum_posts SET is_answered = TRUE WHERE post_id = $1", [questionId])
+    return true
+  }
+  return false
 }

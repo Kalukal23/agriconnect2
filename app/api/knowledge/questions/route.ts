@@ -48,13 +48,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
     }
 
-    const userId = String((user as any).id || (user as any).user_id || "")
-    const phone = (user as any).phone || ""
+    const authorId = (user as any).id
+    if (!authorId) {
+       return NextResponse.json({ error: "User ID not found in session" }, { status: 400 })
+    }
 
     await addQuestion({
-      farmerId: userId,
-      farmerName: (user as any).username || (user as any).name || "Farmer",
-      farmerPhone: phone,
+      authorId,
       title,
       content,
     })

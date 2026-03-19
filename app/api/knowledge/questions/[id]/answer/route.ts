@@ -28,14 +28,14 @@ export async function POST(
       return NextResponse.json({ error: "Answer content is required" }, { status: 400 })
     }
 
-    const officerId = String((user as any).id || (user as any).user_id)
-    const officerName = (user as any).username || (user as any).name || "Extension Worker"
+    const officerId = (user as any).id
+    if (!officerId) {
+      return NextResponse.json({ error: "Officer ID not found in session" }, { status: 400 })
+    }
 
     const success = await addAnswer(questionId, {
       officerId,
-      officerName,
       content,
-      ...(mediaUrl && { mediaUrl, mediaType }),
     })
 
     if (!success) {
