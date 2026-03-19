@@ -31,11 +31,13 @@ async function initDB() {
         const passwordHash = bcrypt.hashSync(defaultPassword, 10)
 
         const userResult = await pool.query(
-            `INSERT INTO users (username, email, phone, password_hash, role)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO users (name, username, email, phone, password, password_hash, role)
+             VALUES ($1, $1, $2, $3, $4, $4, $5)
              ON CONFLICT (phone) DO UPDATE
                SET username = EXCLUDED.username,
                    email = EXCLUDED.email,
+                   name = EXCLUDED.name,
+                   password = EXCLUDED.password,
                    password_hash = EXCLUDED.password_hash
              RETURNING id`,
             ["demo", "demo@agri.example", defaultPhone, passwordHash, "Farmer"],
