@@ -11,6 +11,7 @@ export interface Article {
   publishedAt: Date
   views: number
   language: string
+  mediaFiles?: Array<{ name: string; url: string; type: "video" | "audio" | "image" }>
 }
 
 export interface ForumPost {
@@ -58,6 +59,7 @@ function mapArticleRow(row: any): Article {
     publishedAt: row.publish_date ? new Date(row.publish_date) : new Date(),
     views: Number(row.view_count || 0),
     language: row.language || "en",
+    mediaFiles: Array.isArray(row.metadata?.mediaFiles) ? row.metadata.mediaFiles : [],
   }
 }
 
@@ -198,5 +200,27 @@ export async function createForumPost(
     replies: 0,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+  }
+}
+
+export async function createArticle(article: Omit<Article, "id" | "publishedAt" | "views" | "author"> & { authorId: string; authorName: string }): Promise<Article> {
+  const sql = `
+    INSERT INTO extension_content (title_en, description, category, content_type, language, author_id, status, publish_date, metadata, created_at, updated_at)
+    VALUES ($1, $2, $3, 'ARTICLE', $4, $5, 'PUBLISHED', NOW(), $6, NOW(), NOW())
+    RETURNING content_id, title_en, title_am, description, category, tags, language, view_count, publish_date
+  `
+  const result = await queryWithRetry(sql, [
+    article.title,
+    article.content,
+    article.category,
+    article.language || "en",
+    article.authorId,
+    JSON.stringify({ mediaFiles: article.mediaFiles || [] })
+  ])
+  
+  const row = result.rows[0]
+  return {
+    ...mapArticleRow(row),
+    author: article.authorName
   }
 }

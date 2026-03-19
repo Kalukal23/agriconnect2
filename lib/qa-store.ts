@@ -1,8 +1,4 @@
-// File-based persistent store for farmer Q&A
-// Uses a JSON file so data survives Next.js hot-reloads and restarts
-
-import fs from "fs"
-import path from "path"
+import { queryWithRetry } from "@/lib/db-mock"
 
 export interface FarmerAnswer {
   id: string
@@ -26,43 +22,73 @@ export interface FarmerQuestion {
   status: "pending" | "answered"
 }
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const QA_FILE = path.join(DATA_DIR, "qa-store.json")
+export async function readQAStore(): Promise<FarmerQuestion[]> {
+  const sql = `
+    SELECT p.post_id, p.title, p.content, p.created_at, p.is_answered,
+           u.id AS farmer_id, u.name AS farmer_name, u.phone AS farmer_phone
+    FROM forum_posts p
+    LEFT JOIN users u ON p.author_id = u.id
+    WHERE p.is_question = TRUE
+    ORDER BY p.created_at DESC
+  `
+  const result = await queryWithRetry(sql)
+  const questions: FarmerQuestion[] = []
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
+  for (const row of result.rows) {
+    // Get answers for each question
+    const answersResult = await queryWithRetry(
+      `SELECT r.reply_id, r.content, r.created_at, r.author_id, u.name AS officer_name
+       FROM forum_replies r
+       LEFT JOIN users u ON r.author_id = u.id
+       WHERE r.post_id = (SELECT id FROM forum_posts WHERE post_id = $1)
+       ORDER BY r.created_at ASC`,
+      [row.post_id]
+    )
+
+    const answers: FarmerAnswer[] = answersResult.rows.map((r: any) => ({
+      id: r.reply_id,
+      officerId: String(r.author_id),
+      officerName: r.officer_name || "Extension Worker",
+      content: r.content,
+      createdAt: r.created_at.toISOString(),
+    }))
+
+    questions.push({
+      id: row.post_id,
+      farmerId: String(row.farmer_id),
+      farmerName: row.farmer_name || "Unknown Farmer",
+      farmerPhone: row.farmer_phone || "",
+      title: row.title,
+      content: row.content,
+      createdAt: row.created_at.toISOString(),
+      answers,
+      status: row.is_answered ? "answered" : "pending",
+    })
   }
+
+  return questions
 }
 
-export function readQAStore(): FarmerQuestion[] {
-  ensureDataDir()
-  if (!fs.existsSync(QA_FILE)) return []
-  try {
-    const raw = fs.readFileSync(QA_FILE, "utf-8")
-    return JSON.parse(raw) as FarmerQuestion[]
-  } catch {
-    return []
-  }
+export async function addQuestion(q: Omit<FarmerQuestion, "id" | "createdAt" | "answers" | "status">): Promise<void> {
+  const sql = `
+    INSERT INTO forum_posts (author_id, title, content, is_question, status, created_at, updated_at)
+    VALUES ((SELECT id FROM users WHERE phone = $1 OR user_id::text = $2 LIMIT 1), $3, $4, TRUE, 'pending', NOW(), NOW())
+  `
+  await queryWithRetry(sql, [q.farmerPhone || "999", q.farmerId, q.title, q.content])
 }
 
-export function writeQAStore(data: FarmerQuestion[]): void {
-  ensureDataDir()
-  fs.writeFileSync(QA_FILE, JSON.stringify(data, null, 2), "utf-8")
-}
+export async function addAnswer(questionId: string, answer: Omit<FarmerAnswer, "id" | "createdAt">): Promise<boolean> {
+  const findPostId = await queryWithRetry("SELECT id FROM forum_posts WHERE post_id = $1", [questionId])
+  if (findPostId.rows.length === 0) return false
+  const postId = findPostId.rows[0].id
 
-export function addQuestion(q: FarmerQuestion): void {
-  const store = readQAStore()
-  store.unshift(q)
-  writeQAStore(store)
-}
+  const sql = `
+    INSERT INTO forum_replies (post_id, author_id, content, created_at, updated_at)
+    VALUES ($1, $2, $3, NOW(), NOW())
+  `
+  await queryWithRetry(sql, [postId, answer.officerId, answer.content])
 
-export function addAnswer(questionId: string, answer: FarmerAnswer): FarmerQuestion | null {
-  const store = readQAStore()
-  const question = store.find((q) => q.id === questionId)
-  if (!question) return null
-  question.answers.push(answer)
-  question.status = "answered"
-  writeQAStore(store)
-  return question
+  // Update question status to answered
+  await queryWithRetry("UPDATE forum_posts SET is_answered = TRUE WHERE id = $1", [postId])
+  return true
 }

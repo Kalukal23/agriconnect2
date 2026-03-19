@@ -1,59 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentUser } from "@/lib/auth"
-import { readPosts, addPost, type CommunityPost } from "@/lib/community-store"
+import { readPosts, addPost } from "@/lib/community-store"
 
 export async function GET(request: NextRequest) {
-  const category = request.nextUrl.searchParams.get("category")
-  let posts = readPosts()
-
-  if (category && category !== "all") {
-    posts = posts.filter((p) => p.category.toLowerCase() === category.toLowerCase())
+  try {
+    const posts = await readPosts()
+    return NextResponse.json(posts)
+  } catch (error) {
+    console.error("[v0] GET /api/community/posts error:", error)
+    return NextResponse.json({ error: "Failed to fetch posts" }, { status: 500 })
   }
-
-  // Sort newest first
-  posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-  return NextResponse.json(posts)
 }
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { title, content, category } = body
 
-    if (!title || !content || !category) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!title || !content) {
+      return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
     }
 
-    const now = new Date().toISOString()
-    const post: CommunityPost = {
-      id: `post_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      userId: String((user as any).id || (user as any).user_id || ""),
-      userName: (user as any).username || (user as any).name || "Farmer",
-      userRegion:
-        typeof (user as any).location === "object"
-          ? (user as any).location?.region || "Ethiopia"
-          : (user as any).location || "Ethiopia",
+    const userId = String((user as any).id || (user as any).user_id || "")
+
+    await addPost({
+      userId,
+      userName: (user as any).username || (user as any).name || "User",
+      userRegion: (user as any).location?.region || (user as any).location || "Ethiopia",
       title,
       content,
-      category,
-      likes: 0,
-      likedBy: [],
-      replies: 0,
-      replyList: [],
-      createdAt: now,
-      updatedAt: now,
-    }
+      category: category || "General",
+    })
 
-    addPost(post)
-    return NextResponse.json(post, { status: 201 })
+    return NextResponse.json({ success: true }, { status: 201 })
   } catch (error) {
-    console.error("[v0] Create post error:", error)
+    console.error("[v0] POST /api/community/posts error:", error)
     return NextResponse.json({ error: "Failed to create post" }, { status: 500 })
   }
 }

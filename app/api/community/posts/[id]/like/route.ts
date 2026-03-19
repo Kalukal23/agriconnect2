@@ -14,7 +14,7 @@ export async function POST(
     }
 
     const userId = String((user as any).id || (user as any).user_id || "")
-    const result = toggleLike(id, userId)
+    const result = await toggleLike(id, userId)
 
     if (!result) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 })
