@@ -28,8 +28,8 @@ interface FarmerQuestion {
 }
 
 export function KnowledgeQA({ user }: { user: any }) {
-  const role = user?.role || "Farmer"
-  const isExtensionWorker = role === "ExtensionOfficer"
+  const role = (user?.role || "Farmer").toLowerCase()
+  const isExtensionWorker = ["extensionofficer", "extension_officer", "extensionworker", "extension worker", "admin"].includes(role)
 
   const [questions, setQuestions] = useState<FarmerQuestion[]>([])
   const [loading, setLoading] = useState(true)
